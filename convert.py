@@ -1,49 +1,28 @@
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import requests
 import threading
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-
-API_TOKEN = "7551381595:AAHW7Chk4-8OLIwM6D4FQJUZMDLpH5SeFbQ"
-EXCHANGE_API_URL = "https://api.exchangerate-api.com/v4/latest/"
-CURRENCY_NAMES = {"USD": "US Dollars", "EUR": "Euros", "GBP": "British Pounds", "RWF": "Rwandan Franc", "KES": "Kenyan Shillings", "INR": "Indian Rupees", "JPY": "Japanese Yen", "AUD": "Australian Dollars", "CAD": "Canadian Dollars", "CHF": "Swiss Francs"}
-
-answer_count = 0  
-
-# Flask setup
+# Setup Flask app
 app = Flask(__name__)
 
-@app.route('/convert', methods=['GET'])
-def convert_currency():
-    amount = request.args.get('amount', type=float)
-    currency_from = request.args.get('from', type=str).upper()
-    currency_to = request.args.get('to', type=str).upper()
-    
-    if not amount or not currency_from or not currency_to:
-        return jsonify({"error": "Missing parameters. Please provide amount, from and to currencies."}), 400
-    
-    try:
-        data = requests.get(f"{EXCHANGE_API_URL}{currency_from}").json()
-        
-        if currency_to not in data.get("rates", {}):
-            return jsonify({"error": "Invalid currency"}), 400
-        
-        converted_amount = amount * data["rates"][currency_to]
-        result = {
-            "amount": amount,
-            "from": currency_from,
-            "to": currency_to,
-            "converted_amount": round(converted_amount, 2)
-        }
-        return jsonify(result)
-    
-    except Exception as e:
-        return jsonify({"error": f"Error: {str(e)}"}), 500
+# Logging for debugging purposes
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# Telegram bot part (runs in a separate thread to avoid blocking the Flask app)
+API_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Replace with your bot's token
+EXCHANGE_API_URL = "https://api.exchangerate-api.com/v4/latest/"
+CURRENCY_NAMES = {
+    "USD": "US Dollars", "EUR": "Euros", "GBP": "British Pounds", 
+    "RWF": "Rwandan Franc", "KES": "Kenyan Shillings", 
+    "INR": "Indian Rupees", "JPY": "Japanese Yen", 
+    "AUD": "Australian Dollars", "CAD": "Canadian Dollars", "CHF": "Swiss Francs"
+}
+
+answer_count = 0
+
+# Telegram bot function
 async def convert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global answer_count
     if not context.args:
@@ -76,15 +55,20 @@ async def convert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)}")
 
-def start_bot():
+# Flask route for health check or any other API endpoints you want to use
+@app.route('/')
+def index():
+    return "Your Flask API is running!"
+
+# Function to run the Telegram bot in a separate thread
+def run_bot():
     app = Application.builder().token(API_TOKEN).build()
     app.add_handler(CommandHandler("convert", convert))
     app.run_polling()
 
-if __name__ == "__main__":
-    # Start Flask in a separate thread
-    flask_thread = threading.Thread(target=lambda: app.run(debug=True, use_reloader=False))
-    flask_thread.start()
-
-    # Start the Telegram bot
-    start_bot()
+# Run the Telegram bot in a separate thread so it can work alongside Flask
+if __name__ == '__main__':
+    # Start the Flask app in a separate thread
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000)).start()
+    # Run the bot in the main thread
+    run_bot()
